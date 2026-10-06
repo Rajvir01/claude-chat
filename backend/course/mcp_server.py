@@ -1,6 +1,6 @@
 from pydantic import Field
 from mcp.server.fastmcp import FastMCP
-from mcp.server.fastmcp import base
+from mcp.server.fastmcp.prompts import base
 
 mcp = FastMCP("DocumentMCP", log_level="ERROR")
 

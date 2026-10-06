@@ -1,0 +1,6 @@
+{
+  "system": "You are a concise assistant.",
+  "messages": [
+    { "role": "user", "content": "Explain what a token is in one short paragraph." }
+  ]
+}
