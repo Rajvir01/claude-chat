@@ -1,17 +1,35 @@
-// Request shapes. These mirror backend/app/schemas.py; keep the two in sync.
+// API shapes. These mirror backend/app/schemas.py; keep the two in sync.
+// (UUIDs and datetimes arrive as strings in JSON.)
 
 export type Role = "user" | "assistant";
 
-export interface ChatMessage {
-  role: Role;
-  content: string;
+export interface ConversationSummary {
+  id: string;
+  title: string;
+  updated_at: string;
 }
 
-export interface ChatRequest {
-  messages: ChatMessage[];
-  system?: string;
-  model?: string;
-  max_tokens?: number;
+export interface Conversation extends ConversationSummary {
+  system_prompt: string | null;
+  model: string | null;
+  created_at: string;
+}
+
+export interface Message {
+  id: string;
+  role: Role;
+  content: string;
+  stop_reason: string | null;
+  model: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  cache_read_input_tokens: number | null;
+  cache_creation_input_tokens: number | null;
+  created_at: string;
+}
+
+export interface ConversationDetail extends Conversation {
+  messages: Message[];
 }
 
 // Stream events. These mirror what backend/app/streaming.py yields.

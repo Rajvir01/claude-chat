@@ -1,5 +1,10 @@
 import { readSSE } from "./sse";
-import type { ChatRequest, StreamEvent } from "./types";
+import type {
+  Conversation,
+  ConversationDetail,
+  ConversationSummary,
+  StreamEvent,
+} from "./types";
 
 // NEXT_PUBLIC_ variables are baked into the browser bundle at build time.
 const API_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000";
@@ -13,31 +18,66 @@ export class ChatError extends Error {
   }
 }
 
+// fetch() only throws when the server can't be reached at all; turn that into a readable error.
+async function send(path: string, init: RequestInit = {}): Promise<Response> {
+  try {
+    return await fetch(`${API_URL}${path}`, {
+      ...init,
+      headers: { "Content-Type": "application/json", ...init.headers },
+    });
+  } catch (err) {
+    if (init.signal?.aborted) throw err;
+    throw new ChatError("Can't reach the server. Is the backend running?", true);
+  }
+}
+
+// For normal JSON endpoints: throw on 4xx/5xx, otherwise parse the body.
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await send(path, init);
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    const detail = typeof body?.detail === "string" ? body.detail : null;
+    throw new ChatError(detail ?? `Request failed with status ${response.status}`, response.status >= 500);
+  }
+  return response.status === 204 ? (undefined as T) : response.json();
+}
+
+export function listConversations() {
+  return request<ConversationSummary[]>("/conversations");
+}
+
+export function createConversation() {
+  return request<Conversation>("/conversations", { method: "POST", body: "{}" });
+}
+
+export function getConversation(id: string) {
+  return request<ConversationDetail>(`/conversations/${id}`);
+}
+
+export function deleteConversation(id: string) {
+  return request<void>(`/conversations/${id}`, { method: "DELETE" });
+}
+
 /**
- * POSTs to the backend and yields each stream event as it arrives.
+ * Asks Claude to reply in a conversation, yielding stream events as they arrive.
+ * Pass `content` to add a new user message first; omit it to retry the last one.
  *
  * We use fetch instead of the browser's built-in EventSource because
  * EventSource can only make GET requests, and we need to POST a JSON body.
  */
-export async function* streamChat(
-  request: ChatRequest,
+export async function* streamReply(
+  conversationId: string,
+  content: string | undefined,
   signal: AbortSignal,
 ): AsyncGenerator<StreamEvent> {
-  let response: Response;
-  try {
-    response = await fetch(`${API_URL}/chat`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(request),
-      signal,
-    });
-  } catch (err) {
-    if (signal.aborted) throw err;
-    throw new ChatError("Can't reach the server. Is the backend running?", true);
-  }
+  const response = await send(`/conversations/${conversationId}/reply`, {
+    method: "POST",
+    body: JSON.stringify({ content }),
+    signal,
+  });
 
   // Errors *before* streaming starts arrive as normal HTTP status codes
-  // (e.g. 422 from Pydantic). Errors *during* streaming arrive as events.
+  // (e.g. 404, 409, 422). Errors *during* streaming arrive as events.
   if (!response.ok || !response.body) {
     throw new ChatError(`Request failed with status ${response.status}`, false);
   }

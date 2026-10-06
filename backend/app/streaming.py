@@ -5,13 +5,16 @@ from collections.abc import AsyncIterator
 import anthropic
 
 from app import config
-from app.schemas import ChatRequest
 
 logger = logging.getLogger(__name__)
+
+MAX_TOKENS = 64000
 
 # One shared async client for the whole app. It holds a connection pool, so
 # creating one per request would waste connections.
 client = anthropic.AsyncAnthropic(api_key=config.ANTHROPIC_API_KEY)
+
+StreamEvent = tuple[str, dict]
 
 
 def sse(event: str, data: dict) -> str:
@@ -28,49 +31,47 @@ def api_error_message(e: anthropic.APIStatusError) -> str:
     return f"Claude API error ({e.status_code})"
 
 
-async def stream_chat(req: ChatRequest) -> AsyncIterator[str]:
-    """Stream Claude's reply as SSE events: text_delta*, then usage + done, or error."""
-    params = {
-        "model": req.model or config.CLAUDE_MODEL,
-        "max_tokens": req.max_tokens,
-        "messages": [m.model_dump() for m in req.messages],
-    }
-    if req.system:
-        params["system"] = req.system
+async def stream_claude(
+    messages: list[dict],
+    *,
+    model: str,
+    system: str | None = None,
+) -> AsyncIterator[StreamEvent]:
+    """Stream Claude's reply as (event, data) pairs: text_delta*, then usage + done, or error.
 
-    # By the time this generator runs, FastAPI has already sent "200 OK" to the
-    # browser. So failures can't become HTTP error codes anymore; they have to
-    # be sent as an `error` event inside the stream.
+    Knows nothing about HTTP or the database; callers decide what to do with each event.
+    """
+    params = {"model": model, "max_tokens": MAX_TOKENS, "messages": messages}
+    if system:
+        params["system"] = system
+
     try:
         async with client.messages.stream(**params) as stream:
             async for text in stream.text_stream:
-                yield sse("text_delta", {"text": text})
+                yield "text_delta", {"text": text}
 
             final = await stream.get_final_message()
 
-        yield sse(
-            "usage",
-            {
-                "model": final.model,
-                "input_tokens": final.usage.input_tokens,
-                "output_tokens": final.usage.output_tokens,
-                "cache_read_input_tokens": final.usage.cache_read_input_tokens or 0,
-                "cache_creation_input_tokens": final.usage.cache_creation_input_tokens or 0,
-            },
-        )
-        yield sse("done", {"stop_reason": final.stop_reason})
+        yield "usage", {
+            "model": final.model,
+            "input_tokens": final.usage.input_tokens,
+            "output_tokens": final.usage.output_tokens,
+            "cache_read_input_tokens": final.usage.cache_read_input_tokens or 0,
+            "cache_creation_input_tokens": final.usage.cache_creation_input_tokens or 0,
+        }
+        yield "done", {"stop_reason": final.stop_reason}
 
     # Most specific first: each tells the UI whether "Retry" makes sense.
     except anthropic.AuthenticationError:
-        yield sse("error", {"message": "Server API key is invalid", "retryable": False})
+        yield "error", {"message": "Server API key is invalid", "retryable": False}
     except anthropic.RateLimitError:
-        yield sse("error", {"message": "Rate limited, try again shortly", "retryable": True})
+        yield "error", {"message": "Rate limited, try again shortly", "retryable": True}
     except anthropic.BadRequestError as e:
-        yield sse("error", {"message": api_error_message(e), "retryable": False})
+        yield "error", {"message": api_error_message(e), "retryable": False}
     except anthropic.APIStatusError as e:
-        yield sse("error", {"message": api_error_message(e), "retryable": e.status_code >= 500})
+        yield "error", {"message": api_error_message(e), "retryable": e.status_code >= 500}
     except anthropic.APIConnectionError:
-        yield sse("error", {"message": "Could not reach the Claude API", "retryable": True})
+        yield "error", {"message": "Could not reach the Claude API", "retryable": True}
     except Exception:
         logger.exception("Unexpected error while streaming")
-        yield sse("error", {"message": "Unexpected server error", "retryable": True})
+        yield "error", {"message": "Unexpected server error", "retryable": True}

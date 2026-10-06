@@ -2,13 +2,13 @@
 name = "chat-backend"
 version = "0.1.0"
 description = "FastAPI backend for the streaming Claude chat app"
-readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "anthropic>=1.11.0",
     "fastapi>=0.142.0",
     "uvicorn[standard]>=0.54.0",
     "python-dotenv>=1.1.0",
+    "supabase>=2.32.0",
     # Course CLI (main.py / mcp_server.py) is written against mcp 1.8 APIs.
     # mcp 2.x renamed FastMCP; migrate when we add MCP tools to the web app.
     "mcp[cli]==1.8.0",

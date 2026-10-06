@@ -4,7 +4,15 @@ import { useEffect, useRef } from "react";
 import type { ChatStatus, UIMessage } from "@/hooks/useChat";
 import { MessageBubble } from "./MessageBubble";
 
-export function MessageList({ messages, status }: { messages: UIMessage[]; status: ChatStatus }) {
+export function MessageList({
+  messages,
+  status,
+  loading,
+}: {
+  messages: UIMessage[];
+  status: ChatStatus;
+  loading: boolean;
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   // Auto-scroll only while the user is at the bottom. If they scroll up to
   // re-read something mid-stream, we stop yanking them back down.
@@ -29,7 +37,9 @@ export function MessageList({ messages, status }: { messages: UIMessage[]; statu
   return (
     <div ref={containerRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
       <div className="mx-auto flex max-w-3xl flex-col gap-6 px-4 py-8">
-        {messages.length === 0 ? (
+        {loading ? (
+          <p className="mt-24 text-center text-sm text-zinc-500">Loading…</p>
+        ) : messages.length === 0 ? (
           <div className="mt-24 text-center">
             <h2 className="text-2xl font-semibold">How can I help?</h2>
             <p className="mt-2 text-sm text-zinc-500">Replies stream in as Claude writes them.</p>
