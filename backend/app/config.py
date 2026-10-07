@@ -15,6 +15,11 @@ CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "")
 
+# Most input tokens we'll send per request. Models accept far more (Sonnet 4.5
+# takes 1M), but every request pays for its whole input, so this is a cost cap.
+# Set it very low (e.g. 1500) to watch old messages get trimmed.
+MAX_CONTEXT_TOKENS = int(os.getenv("MAX_CONTEXT_TOKENS", "100000"))
+
 # Comma-separated list of browser origins allowed to call this API (CORS).
 FRONTEND_ORIGINS = [
     origin.strip()

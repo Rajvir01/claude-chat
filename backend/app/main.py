@@ -7,6 +7,7 @@ from fastapi.responses import StreamingResponse
 
 from app import config, db
 from app.chat import make_title, reply_stream
+from app.context import ContextTooLongError, fit_to_context
 from app.schemas import (
     DEFAULT_TITLE,
     Conversation,
@@ -89,20 +90,29 @@ async def reply(conversation_id: UUID, body: ReplyRequest):
     # Everything that can fail with a normal HTTP error happens *before* we
     # start streaming, while we can still send a 404 or 409 status.
     conversation = await get_conversation_or_404(conversation_id)
-    history = await db.list_messages(conversation_id)
-
+    saved = await db.list_messages(conversation_id)
+    history = [{"role": m["role"], "content": m["content"]} for m in saved]
     if body.content is not None:
-        if not history and conversation["title"] == DEFAULT_TITLE:
-            conversation = await db.update_conversation(
-                conversation_id, {"title": make_title(body.content)}
-            )
-        history.append(await db.add_message(conversation_id, "user", body.content))
+        history.append({"role": "user", "content": body.content})
 
     if not history or history[-1]["role"] != "user":
         raise HTTPException(status_code=409, detail="Last message isn't from the user; nothing to reply to")
 
+    # Fit the history to the context budget *before* saving anything, so a
+    # message that's too long on its own is rejected without being stored.
+    model = conversation["model"] or config.CLAUDE_MODEL
+    try:
+        context = await fit_to_context(history, model=model, system=conversation["system_prompt"])
+    except ContextTooLongError as e:
+        raise HTTPException(status_code=413, detail=str(e))
+
+    if body.content is not None:
+        if not saved and conversation["title"] == DEFAULT_TITLE:
+            await db.update_conversation(conversation_id, {"title": make_title(body.content)})
+        await db.add_message(conversation_id, "user", body.content)
+
     return StreamingResponse(
-        reply_stream(conversation, history),
+        reply_stream(str(conversation_id), model, context),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

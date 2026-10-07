@@ -36,12 +36,13 @@ async def stream_claude(
     *,
     model: str,
     system: str | None = None,
+    max_tokens: int = MAX_TOKENS,
 ) -> AsyncIterator[StreamEvent]:
     """Stream Claude's reply as (event, data) pairs: text_delta*, then usage + done, or error.
 
     Knows nothing about HTTP or the database; callers decide what to do with each event.
     """
-    params = {"model": model, "max_tokens": MAX_TOKENS, "messages": messages}
+    params = {"model": model, "max_tokens": max_tokens, "messages": messages}
     if system:
         params["system"] = system
 

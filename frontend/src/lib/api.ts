@@ -13,6 +13,8 @@ export class ChatError extends Error {
   constructor(
     message: string,
     public retryable: boolean,
+    // HTTP status if the server rejected the request before streaming.
+    public status?: number,
   ) {
     super(message);
   }
@@ -31,14 +33,21 @@ async function send(path: string, init: RequestInit = {}): Promise<Response> {
   }
 }
 
+// Turn a 4xx/5xx response into a ChatError, using FastAPI's `detail` message when there is one.
+async function errorFrom(response: Response): Promise<ChatError> {
+  const body = await response.json().catch(() => null);
+  const detail = typeof body?.detail === "string" ? body.detail : null;
+  return new ChatError(
+    detail ?? `Request failed with status ${response.status}`,
+    response.status >= 500,
+    response.status,
+  );
+}
+
 // For normal JSON endpoints: throw on 4xx/5xx, otherwise parse the body.
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await send(path, init);
-  if (!response.ok) {
-    const body = await response.json().catch(() => null);
-    const detail = typeof body?.detail === "string" ? body.detail : null;
-    throw new ChatError(detail ?? `Request failed with status ${response.status}`, response.status >= 500);
-  }
+  if (!response.ok) throw await errorFrom(response);
   return response.status === 204 ? (undefined as T) : response.json();
 }
 
@@ -77,10 +86,9 @@ export async function* streamReply(
   });
 
   // Errors *before* streaming starts arrive as normal HTTP status codes
-  // (e.g. 404, 409, 422). Errors *during* streaming arrive as events.
-  if (!response.ok || !response.body) {
-    throw new ChatError(`Request failed with status ${response.status}`, false);
-  }
+  // (e.g. 404, 409, 413, 422). Errors *during* streaming arrive as events.
+  if (!response.ok) throw await errorFrom(response);
+  if (!response.body) throw new ChatError("Empty response from server", true);
 
   for await (const { event, data } of readSSE(response.body)) {
     yield { event, data: JSON.parse(data) } as StreamEvent;

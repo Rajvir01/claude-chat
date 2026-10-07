@@ -11,6 +11,8 @@ export interface UIMessage {
   usage?: Usage;
   // From the API ("end_turn", "max_tokens", "refusal"), or "stopped" when the user hit Stop.
   stopReason?: string | null;
+  // How many of the oldest messages were left out to fit the context budget (live replies only).
+  trimmedMessages?: number;
 }
 
 export type ChatStatus = "idle" | "streaming" | "error";
@@ -107,6 +109,9 @@ export function useChat(onChange: () => void) {
 
       for await (const ev of streamReply(id, content, controller.signal)) {
         switch (ev.event) {
+          case "context":
+            patchMessage(assistantId, () => ({ trimmedMessages: ev.data.trimmed_messages }));
+            break;
           case "text_delta":
             patchMessage(assistantId, (m) => ({ content: m.content + ev.data.text }));
             break;
@@ -136,7 +141,11 @@ export function useChat(onChange: () => void) {
         setStatus("idle");
       } else {
         // Remove the failed reply so Retry can regenerate it from the user's message.
-        setMessages((prev) => prev.filter((m) => m.id !== assistantId));
+        // A 4xx means the server rejected the request before saving anything
+        // (e.g. 413: message too long), so the new user message goes too.
+        const rejected = err instanceof ChatError && err.status !== undefined && err.status < 500;
+        const unsavedId = rejected && content !== undefined ? history.at(-1)?.id : undefined;
+        setMessages((prev) => prev.filter((m) => m.id !== assistantId && m.id !== unsavedId));
         setError(toErrorState(err));
         setStatus("error");
       }

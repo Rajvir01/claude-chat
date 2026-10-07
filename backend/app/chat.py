@@ -5,7 +5,8 @@ from collections.abc import AsyncIterator
 
 import anyio
 
-from app import config, db
+from app import db
+from app.context import FittedContext
 from app.streaming import sse, stream_claude
 
 logger = logging.getLogger(__name__)
@@ -16,19 +17,22 @@ def make_title(first_message: str, limit: int = 60) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
-async def reply_stream(conversation: dict, history: list[dict]) -> AsyncIterator[str]:
-    """Stream Claude's reply to `history` as SSE, saving it to the database as it finishes."""
-    conversation_id = conversation["id"]
+async def reply_stream(conversation_id: str, model: str, context: FittedContext) -> AsyncIterator[str]:
+    """Stream Claude's reply as SSE, saving it to the database as it finishes."""
     parts: list[str] = []
     usage: dict = {}
     # True once the reply is saved or failed: nothing left to clean up.
     settled = False
 
+    # First event: what we're sending Claude, so the UI can say if history was trimmed.
+    yield sse("context", {"input_tokens": context.input_tokens, "trimmed_messages": context.trimmed_messages})
+
     try:
         async for event, data in stream_claude(
-            [{"role": m["role"], "content": m["content"]} for m in history],
-            model=conversation["model"] or config.CLAUDE_MODEL,
-            system=conversation["system_prompt"],
+            context.messages,
+            model=model,
+            system=context.system,
+            max_tokens=context.max_tokens,
         ):
             if event == "text_delta":
                 parts.append(data["text"])

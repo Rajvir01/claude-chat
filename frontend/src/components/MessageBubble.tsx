@@ -30,6 +30,12 @@ export function MessageBubble({
 
   return (
     <div>
+      {!!message.trimmedMessages && (
+        <p className="mb-2 text-xs text-amber-700 dark:text-amber-400">
+          {message.trimmedMessages} earliest messages weren&apos;t sent to Claude, to keep this
+          chat within its context limit.
+        </p>
+      )}
       {/* react-markdown never renders raw HTML from the model, so a reply
           containing <script> shows up as text instead of running. */}
       <div className="prose prose-zinc max-w-none dark:prose-invert prose-pre:bg-[#0d1117] prose-pre:p-0">

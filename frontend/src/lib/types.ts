@@ -44,6 +44,7 @@ export interface Usage {
 
 // A discriminated union: checking `event` tells TypeScript the shape of `data`.
 export type StreamEvent =
+  | { event: "context"; data: { input_tokens: number | null; trimmed_messages: number } }
   | { event: "text_delta"; data: { text: string } }
   | { event: "usage"; data: Usage }
   | { event: "done"; data: { stop_reason: string | null } }
