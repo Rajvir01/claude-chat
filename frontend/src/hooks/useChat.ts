@@ -1,8 +1,14 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { ChatError, createConversation, getConversation, streamReply } from "@/lib/api";
-import type { Message, Role, Usage } from "@/lib/types";
+import {
+  ChatError,
+  createConversation,
+  getConversation,
+  streamReply,
+  updateConversation,
+} from "@/lib/api";
+import type { Conversation, ConversationSettings, Message, Role, Usage } from "@/lib/types";
 
 export interface UIMessage {
   id: string;
@@ -41,6 +47,19 @@ function toUIMessage(m: Message): UIMessage {
   };
 }
 
+export const DEFAULT_SETTINGS: ConversationSettings = {
+  system_prompt: null,
+  model: null,
+  temperature: null,
+  effort: null,
+  max_tokens: null,
+};
+
+function pickSettings(c: Conversation): ConversationSettings {
+  const { system_prompt, model, temperature, effort, max_tokens } = c;
+  return { system_prompt, model, temperature, effort, max_tokens };
+}
+
 function toErrorState(err: unknown): ChatErrorState {
   return err instanceof ChatError
     ? { message: err.message, retryable: err.retryable }
@@ -58,6 +77,8 @@ export function useChat(onChange: () => void) {
   const [status, setStatus] = useState<ChatStatus>("idle");
   const [error, setError] = useState<ChatErrorState | null>(null);
   const [loading, setLoading] = useState(false);
+  // For a new chat these are a draft, sent along when the chat is created.
+  const [settings, setSettings] = useState<ConversationSettings>(DEFAULT_SETTINGS);
   // Refs, not state: changing them shouldn't re-render, we just need to read them later.
   const abortRef = useRef<AbortController | null>(null);
   // Bumped on every open(). A load that finishes after the user already
@@ -72,6 +93,7 @@ export function useChat(onChange: () => void) {
 
     setConversationId(id);
     setMessages([]);
+    setSettings(DEFAULT_SETTINGS);
     setError(null);
     setStatus("idle");
     if (id === null) return;
@@ -79,7 +101,10 @@ export function useChat(onChange: () => void) {
     setLoading(true);
     try {
       const conversation = await getConversation(id);
-      if (openCount === openCountRef.current) setMessages(conversation.messages.map(toUIMessage));
+      if (openCount === openCountRef.current) {
+        setMessages(conversation.messages.map(toUIMessage));
+        setSettings(pickSettings(conversation));
+      }
     } catch (err) {
       if (openCount !== openCountRef.current) return;
       setError({ ...toErrorState(err), retryable: false });
@@ -163,7 +188,7 @@ export function useChat(onChange: () => void) {
     if (id === null) {
       // First message of a new chat: create the conversation, then reply in it.
       try {
-        id = (await createConversation()).id;
+        id = (await createConversation(settings)).id;
       } catch (err) {
         setError({ ...toErrorState(err), retryable: false });
         setStatus("error");
@@ -186,5 +211,26 @@ export function useChat(onChange: () => void) {
     run(conversationId, messages);
   }
 
-  return { conversationId, messages, status, error, loading, open, send, stop, retry };
+  /** Save new settings. They apply from the next reply on. Throws if saving fails. */
+  async function saveSettings(next: ConversationSettings) {
+    if (conversationId === null) {
+      setSettings(next); // not saved yet: kept as a draft until the first message
+      return;
+    }
+    setSettings(pickSettings(await updateConversation(conversationId, next)));
+  }
+
+  return {
+    conversationId,
+    messages,
+    settings,
+    status,
+    error,
+    loading,
+    open,
+    send,
+    stop,
+    retry,
+    saveSettings,
+  };
 }

@@ -17,8 +17,9 @@ def make_title(first_message: str, limit: int = 60) -> str:
     return text if len(text) <= limit else text[: limit - 1].rstrip() + "…"
 
 
-async def reply_stream(conversation_id: str, model: str, context: FittedContext) -> AsyncIterator[str]:
+async def reply_stream(conversation: dict, model: str, context: FittedContext) -> AsyncIterator[str]:
     """Stream Claude's reply as SSE, saving it to the database as it finishes."""
+    conversation_id = conversation["id"]
     parts: list[str] = []
     usage: dict = {}
     # True once the reply is saved or failed: nothing left to clean up.
@@ -33,6 +34,8 @@ async def reply_stream(conversation_id: str, model: str, context: FittedContext)
             model=model,
             system=context.system,
             max_tokens=context.max_tokens,
+            temperature=conversation["temperature"],
+            effort=conversation["effort"],
         ):
             if event == "text_delta":
                 parts.append(data["text"])

@@ -2,6 +2,8 @@ import os
 
 from dotenv import load_dotenv
 
+from app.model_registry import MODELS
+
 # Reads backend/.env into os.environ. In production (Render/Railway) there is
 # no .env file; the host injects real environment variables instead, and this
 # call simply does nothing.
@@ -30,5 +32,6 @@ FRONTEND_ORIGINS = [
 # Fail at startup, not on the first request, if config is missing.
 assert ANTHROPIC_API_KEY, "ANTHROPIC_API_KEY cannot be empty. Update backend/.env"
 assert CLAUDE_MODEL, "CLAUDE_MODEL cannot be empty. Update backend/.env"
+assert CLAUDE_MODEL in MODELS, f"CLAUDE_MODEL must be one of {list(MODELS)}. Update backend/.env"
 assert SUPABASE_URL, "SUPABASE_URL cannot be empty. Update backend/.env"
 assert SUPABASE_SECRET_KEY, "SUPABASE_SECRET_KEY cannot be empty. Update backend/.env"

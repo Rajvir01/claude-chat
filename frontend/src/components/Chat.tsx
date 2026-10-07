@@ -3,8 +3,10 @@
 import { useState } from "react";
 import { useChat } from "@/hooks/useChat";
 import { useConversations } from "@/hooks/useConversations";
+import { useModels } from "@/hooks/useModels";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
+import { SettingsPanel } from "./SettingsPanel";
 import { Sidebar } from "./Sidebar";
 
 export function Chat() {
@@ -12,6 +14,7 @@ export function Chat() {
   const {
     conversationId: activeId,
     messages,
+    settings,
     status,
     error,
     loading,
@@ -19,8 +22,14 @@ export function Chat() {
     send,
     stop,
     retry,
+    saveSettings,
   } = useChat(refresh);
+  const models = useModels();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const modelId = settings.model ?? models?.default;
+  const modelLabel = models?.models.find((m) => m.id === modelId)?.label;
 
   function select(id: string | null) {
     open(id);
@@ -63,7 +72,24 @@ export function Chat() {
           <h1 className="truncate text-sm font-semibold">
             {conversations.find((c) => c.id === activeId)?.title ?? "New chat"}
           </h1>
+          <button
+            onClick={() => setSettingsOpen(true)}
+            className="ml-auto flex shrink-0 items-center gap-2 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+          >
+            {modelLabel && <span className="text-zinc-500">{modelLabel}</span>}
+            Settings
+          </button>
         </header>
+
+        {settingsOpen && (
+          <SettingsPanel
+            settings={settings}
+            models={models}
+            isNewChat={activeId === null}
+            onSave={saveSettings}
+            onClose={() => setSettingsOpen(false)}
+          />
+        )}
 
         <MessageList messages={messages} status={status} loading={loading} />
 

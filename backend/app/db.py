@@ -34,12 +34,8 @@ async def list_conversations() -> list[dict]:
     return res.data
 
 
-async def create_conversation(title: str, system_prompt: str | None, model: str | None) -> dict:
-    res = await (
-        _db().table("conversations")
-        .insert({"title": title, "system_prompt": system_prompt, "model": model})
-        .execute()
-    )
+async def create_conversation(fields: dict) -> dict:
+    res = await _db().table("conversations").insert(fields).execute()
     return res.data[0]
 
 

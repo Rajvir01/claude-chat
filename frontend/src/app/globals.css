@@ -4,6 +4,9 @@
 :root {
   --background: #ffffff;
   --foreground: #171717;
+  /* Lets the browser draw its built-in controls (select popups, checkboxes,
+     sliders, scrollbars) in dark colors when the system is in dark mode. */
+  color-scheme: light dark;
 }
 
 @theme inline {

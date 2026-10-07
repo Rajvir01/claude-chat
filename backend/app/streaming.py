@@ -5,10 +5,12 @@ from collections.abc import AsyncIterator
 import anthropic
 
 from app import config
+from app.model_registry import get_model
 
 logger = logging.getLogger(__name__)
 
 MAX_TOKENS = 64000
+FALLBACK_BETA = "server-side-fallback-2026-07-01"
 
 # One shared async client for the whole app. It holds a connection pool, so
 # creating one per request would waste connections.
@@ -37,17 +39,36 @@ async def stream_claude(
     model: str,
     system: str | None = None,
     max_tokens: int = MAX_TOKENS,
+    temperature: float | None = None,
+    effort: str | None = None,
 ) -> AsyncIterator[StreamEvent]:
     """Stream Claude's reply as (event, data) pairs: text_delta*, then usage + done, or error.
 
     Knows nothing about HTTP or the database; callers decide what to do with each event.
+    Settings the model doesn't support are left out (sending them would be a 400).
     """
+    info = get_model(model)
     params = {"model": model, "max_tokens": max_tokens, "messages": messages}
     if system:
         params["system"] = system
+    if effort is not None and info.supports_effort:
+        params["output_config"] = {"effort": effort}
+    if temperature is not None and info.supports_temperature:
+        # SDK 1.x removed `temperature` from its signatures (newer models reject
+        # it), so for the older models that still accept it we pass it raw.
+        params["extra_body"] = {"temperature": temperature}
+
+    if info.supports_fallbacks:
+        # Beta feature: if a safety classifier declines, the API re-runs the
+        # request on a recommended fallback model instead of returning a refusal.
+        stream_cm = client.beta.messages.stream(
+            **params, betas=[FALLBACK_BETA], fallbacks="default"
+        )
+    else:
+        stream_cm = client.messages.stream(**params)
 
     try:
-        async with client.messages.stream(**params) as stream:
+        async with stream_cm as stream:
             async for text in stream.text_stream:
                 yield "text_delta", {"text": text}
 

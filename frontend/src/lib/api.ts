@@ -2,7 +2,9 @@ import { readSSE } from "./sse";
 import type {
   Conversation,
   ConversationDetail,
+  ConversationSettings,
   ConversationSummary,
+  ModelsResponse,
   StreamEvent,
 } from "./types";
 
@@ -55,8 +57,16 @@ export function listConversations() {
   return request<ConversationSummary[]>("/conversations");
 }
 
-export function createConversation() {
-  return request<Conversation>("/conversations", { method: "POST", body: "{}" });
+export function listModels() {
+  return request<ModelsResponse>("/models");
+}
+
+export function createConversation(settings: ConversationSettings) {
+  return request<Conversation>("/conversations", { method: "POST", body: JSON.stringify(settings) });
+}
+
+export function updateConversation(id: string, patch: Partial<ConversationSettings & { title: string }>) {
+  return request<Conversation>(`/conversations/${id}`, { method: "PATCH", body: JSON.stringify(patch) });
 }
 
 export function getConversation(id: string) {

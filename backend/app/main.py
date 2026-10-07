@@ -1,4 +1,5 @@
 from contextlib import asynccontextmanager
+from dataclasses import asdict
 from uuid import UUID
 
 from fastapi import FastAPI, HTTPException, Response
@@ -8,6 +9,7 @@ from fastapi.responses import StreamingResponse
 from app import config, db
 from app.chat import make_title, reply_stream
 from app.context import ContextTooLongError, fit_to_context
+from app.model_registry import MODELS
 from app.schemas import (
     DEFAULT_TITLE,
     Conversation,
@@ -15,8 +17,10 @@ from app.schemas import (
     ConversationDetail,
     ConversationSummary,
     ConversationUpdate,
+    ModelsResponse,
     ReplyRequest,
 )
+from app.streaming import MAX_TOKENS
 
 
 @asynccontextmanager
@@ -59,9 +63,14 @@ async def list_conversations():
     return await db.list_conversations()
 
 
+@app.get("/models", response_model=ModelsResponse)
+async def list_models():
+    return {"default": config.CLAUDE_MODEL, "models": [asdict(m) for m in MODELS.values()]}
+
+
 @app.post("/conversations", response_model=Conversation, status_code=201)
 async def create_conversation(body: ConversationCreate):
-    return await db.create_conversation(body.title, body.system_prompt, body.model)
+    return await db.create_conversation(body.model_dump())
 
 
 @app.get("/conversations/{conversation_id}", response_model=ConversationDetail)
@@ -72,7 +81,15 @@ async def get_conversation(conversation_id: UUID):
 
 @app.patch("/conversations/{conversation_id}", response_model=Conversation)
 async def update_conversation(conversation_id: UUID, body: ConversationUpdate):
-    updated = await db.update_conversation(conversation_id, body.model_dump())
+    # exclude_unset: only the fields the client actually sent. Without it,
+    # renaming a chat would also reset every setting to None.
+    fields = body.model_dump(exclude_unset=True)
+    if fields.get("title", "") is None:
+        raise HTTPException(status_code=422, detail="Title can't be empty")
+    if not fields:
+        return await get_conversation_or_404(conversation_id)
+
+    updated = await db.update_conversation(conversation_id, fields)
     if updated is None:
         raise HTTPException(status_code=404, detail="Conversation not found")
     return updated
@@ -102,7 +119,12 @@ async def reply(conversation_id: UUID, body: ReplyRequest):
     # message that's too long on its own is rejected without being stored.
     model = conversation["model"] or config.CLAUDE_MODEL
     try:
-        context = await fit_to_context(history, model=model, system=conversation["system_prompt"])
+        context = await fit_to_context(
+            history,
+            model=model,
+            system=conversation["system_prompt"],
+            max_reply_tokens=conversation["max_tokens"] or MAX_TOKENS,
+        )
     except ContextTooLongError as e:
         raise HTTPException(status_code=413, detail=str(e))
 
@@ -112,7 +134,7 @@ async def reply(conversation_id: UUID, body: ReplyRequest):
         await db.add_message(conversation_id, "user", body.content)
 
     return StreamingResponse(
-        reply_stream(str(conversation_id), model, context),
+        reply_stream(conversation, model, context),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

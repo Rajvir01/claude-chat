@@ -9,10 +9,32 @@ export interface ConversationSummary {
   updated_at: string;
 }
 
-export interface Conversation extends ConversationSummary {
+export type Effort = "low" | "medium" | "high";
+
+/** Per-chat settings. null means "use the default". */
+export interface ConversationSettings {
   system_prompt: string | null;
   model: string | null;
+  temperature: number | null;
+  effort: Effort | null;
+  max_tokens: number | null;
+}
+
+export interface Conversation extends ConversationSummary, ConversationSettings {
   created_at: string;
+}
+
+export interface ModelOption {
+  id: string;
+  label: string;
+  description: string;
+  supports_temperature: boolean;
+  supports_effort: boolean;
+}
+
+export interface ModelsResponse {
+  default: string;
+  models: ModelOption[];
 }
 
 export interface Message {

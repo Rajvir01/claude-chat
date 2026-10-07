@@ -84,7 +84,9 @@ def oldest_messages_to_drop(messages: list[dict], total_tokens: int, budget: int
     return drop
 
 
-async def fit_to_context(messages: list[dict], *, model: str, system: str | None) -> FittedContext:
+async def fit_to_context(
+    messages: list[dict], *, model: str, system: str | None, max_reply_tokens: int = MAX_TOKENS
+) -> FittedContext:
     window = await context_window(model)
     budget = min(window - RESERVED_FOR_REPLY, config.MAX_CONTEXT_TOKENS)
 
@@ -94,7 +96,7 @@ async def fit_to_context(messages: list[dict], *, model: str, system: str | None
         # Counting is a nice-to-have: if it fails, send everything and let the
         # API tell us if it's too long.
         logger.warning("Token counting failed; sending the full conversation", exc_info=True)
-        return FittedContext(messages, system, MAX_TOKENS, None, 0)
+        return FittedContext(messages, system, max_reply_tokens, None, 0)
 
     trimmed = 0
     while total > budget:
@@ -112,7 +114,7 @@ async def fit_to_context(messages: list[dict], *, model: str, system: str | None
         messages=messages,
         system=with_trim_note(system, trimmed),
         # Input + output must fit in the window together.
-        max_tokens=min(MAX_TOKENS, window - total),
+        max_tokens=min(max_reply_tokens, window - total),
         input_tokens=total,
         trimmed_messages=trimmed,
     )
