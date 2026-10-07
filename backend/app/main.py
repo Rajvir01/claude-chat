@@ -10,6 +10,7 @@ from app import config, db
 from app.chat import make_title, reply_stream
 from app.context import ContextTooLongError, fit_to_context
 from app.model_registry import MODELS
+from app.pricing import cost_usd
 from app.schemas import (
     DEFAULT_TITLE,
     Conversation,
@@ -65,7 +66,11 @@ async def list_conversations():
 
 @app.get("/models", response_model=ModelsResponse)
 async def list_models():
-    return {"default": config.CLAUDE_MODEL, "models": [asdict(m) for m in MODELS.values()]}
+    return {
+        "default": config.CLAUDE_MODEL,
+        "max_context_tokens": config.MAX_CONTEXT_TOKENS,
+        "models": [asdict(m) for m in MODELS.values()],
+    }
 
 
 @app.post("/conversations", response_model=Conversation, status_code=201)
@@ -76,7 +81,10 @@ async def create_conversation(body: ConversationCreate):
 @app.get("/conversations/{conversation_id}", response_model=ConversationDetail)
 async def get_conversation(conversation_id: UUID):
     conversation = await get_conversation_or_404(conversation_id)
-    return {**conversation, "messages": await db.list_messages(conversation_id)}
+    messages = await db.list_messages(conversation_id)
+    # Cost isn't stored; it's worked out from the saved token counts. (User
+    # messages have no token counts, so their cost comes out as None.)
+    return {**conversation, "messages": [{**m, "cost_usd": cost_usd(m)} for m in messages]}
 
 
 @app.patch("/conversations/{conversation_id}", response_model=Conversation)

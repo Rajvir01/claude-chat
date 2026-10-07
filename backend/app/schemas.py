@@ -81,6 +81,7 @@ class Message(BaseModel):
     output_tokens: int | None
     cache_read_input_tokens: int | None
     cache_creation_input_tokens: int | None
+    cost_usd: float | None
     created_at: datetime
 
 
@@ -98,4 +99,5 @@ class ModelOption(BaseModel):
 
 class ModelsResponse(BaseModel):
     default: str
+    max_context_tokens: int
     models: list[ModelOption]

@@ -2,6 +2,28 @@ import ReactMarkdown from "react-markdown";
 import rehypeHighlight from "rehype-highlight";
 import remarkGfm from "remark-gfm";
 import type { UIMessage } from "@/hooks/useChat";
+import { formatCost, formatTokens, totalInputTokens } from "@/lib/format";
+import type { Usage } from "@/lib/types";
+
+/** "2,104 in (1,816 cached) · 312 out · $0.0012". Hover for the full breakdown. */
+function UsageLine({ usage }: { usage: Usage }) {
+  const cached = usage.cache_read_input_tokens;
+  const breakdown = [
+    `Model: ${usage.model}`,
+    `Uncached input: ${usage.input_tokens.toLocaleString()}`,
+    `Cache writes: ${usage.cache_creation_input_tokens.toLocaleString()}`,
+    `Cache reads: ${cached.toLocaleString()}`,
+    `Output (incl. any thinking): ${usage.output_tokens.toLocaleString()}`,
+  ].join("\n");
+
+  return (
+    <p title={breakdown} className="mt-2 text-xs tabular-nums text-zinc-400 dark:text-zinc-500">
+      {formatTokens(totalInputTokens(usage))} in
+      {cached > 0 && ` (${formatTokens(cached)} cached)`} · {formatTokens(usage.output_tokens)} out
+      {usage.cost_usd !== null && ` · ${formatCost(usage.cost_usd)}`}
+    </p>
+  );
+}
 
 const STOP_NOTICES: Record<string, string> = {
   stopped: "Stopped",
@@ -50,6 +72,7 @@ export function MessageBubble({
         />
       )}
       {notice && <p className="mt-2 text-xs text-zinc-500">{notice}</p>}
+      {message.usage && !isStreaming && <UsageLine usage={message.usage} />}
     </div>
   );
 }

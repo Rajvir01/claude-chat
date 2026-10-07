@@ -42,6 +42,7 @@ function toUIMessage(m: Message): UIMessage {
             output_tokens: m.output_tokens,
             cache_read_input_tokens: m.cache_read_input_tokens ?? 0,
             cache_creation_input_tokens: m.cache_creation_input_tokens ?? 0,
+            cost_usd: m.cost_usd,
           }
         : undefined,
   };

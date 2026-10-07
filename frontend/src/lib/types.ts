@@ -34,6 +34,7 @@ export interface ModelOption {
 
 export interface ModelsResponse {
   default: string;
+  max_context_tokens: number;
   models: ModelOption[];
 }
 
@@ -47,6 +48,7 @@ export interface Message {
   output_tokens: number | null;
   cache_read_input_tokens: number | null;
   cache_creation_input_tokens: number | null;
+  cost_usd: number | null;
   created_at: string;
 }
 
@@ -62,6 +64,7 @@ export interface Usage {
   output_tokens: number;
   cache_read_input_tokens: number;
   cache_creation_input_tokens: number;
+  cost_usd: number | null; // null if the model's price is unknown
 }
 
 // A discriminated union: checking `event` tells TypeScript the shape of `data`.

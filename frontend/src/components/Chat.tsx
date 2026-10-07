@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useChat } from "@/hooks/useChat";
 import { useConversations } from "@/hooks/useConversations";
 import { useModels } from "@/hooks/useModels";
+import { formatCost, formatTokens, totalInputTokens } from "@/lib/format";
 import { Composer } from "./Composer";
 import { MessageList } from "./MessageList";
 import { SettingsPanel } from "./SettingsPanel";
@@ -30,6 +31,14 @@ export function Chat() {
 
   const modelId = settings.model ?? models?.default;
   const modelLabel = models?.models.find((m) => m.id === modelId)?.label;
+
+  // Running cost of this chat, and how big it has grown. The last reply's
+  // input plus its output is roughly what the next message will re-send.
+  const usages = messages.flatMap((m) => (m.usage ? [m.usage] : []));
+  const totalCost = usages.reduce((sum, u) => sum + (u.cost_usd ?? 0), 0);
+  const last = usages.at(-1);
+  const contextTokens = last ? totalInputTokens(last) + last.output_tokens : 0;
+  const contextLimit = models?.max_context_tokens;
 
   function select(id: string | null) {
     open(id);
@@ -69,12 +78,31 @@ export function Chat() {
           >
             ☰
           </button>
-          <h1 className="truncate text-sm font-semibold">
+          <h1 className="min-w-0 flex-1 truncate text-sm font-semibold">
             {conversations.find((c) => c.id === activeId)?.title ?? "New chat"}
           </h1>
+          {usages.length > 0 && (
+            <div
+              title="Chat cost so far · context the next message will send, out of this chat's limit"
+              className="hidden shrink-0 items-center gap-3 text-xs tabular-nums text-zinc-500 sm:flex"
+            >
+              <span>{formatCost(totalCost)}</span>
+              {contextLimit && (
+                <span className="flex items-center gap-1.5">
+                  <span className="h-1.5 w-16 overflow-hidden rounded-full bg-zinc-200 dark:bg-zinc-800">
+                    <span
+                      className="block h-full bg-zinc-500"
+                      style={{ width: `${Math.min(100, (contextTokens / contextLimit) * 100)}%` }}
+                    />
+                  </span>
+                  {formatTokens(contextTokens)} / {formatTokens(contextLimit)}
+                </span>
+              )}
+            </div>
+          )}
           <button
             onClick={() => setSettingsOpen(true)}
-            className="ml-auto flex shrink-0 items-center gap-2 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
+            className="flex shrink-0 items-center gap-2 rounded-lg border border-zinc-300 px-3 py-1.5 text-xs font-medium hover:bg-zinc-100 dark:border-zinc-700 dark:hover:bg-zinc-800"
           >
             {modelLabel && <span className="text-zinc-500">{modelLabel}</span>}
             Settings

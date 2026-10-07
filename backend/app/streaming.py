@@ -48,7 +48,16 @@ async def stream_claude(
     Settings the model doesn't support are left out (sending them would be a 400).
     """
     info = get_model(model)
-    params = {"model": model, "max_tokens": max_tokens, "messages": messages}
+    params = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "messages": messages,
+        # Automatic prompt caching: the API caches the conversation so far, and
+        # the next message (which re-sends all of it) reads that part at a
+        # fraction of the price. Prefixes under ~1-4K tokens (model-dependent)
+        # silently don't cache.
+        "cache_control": {"type": "ephemeral"},
+    }
     if system:
         params["system"] = system
     if effort is not None and info.supports_effort:

@@ -7,6 +7,7 @@ import anyio
 
 from app import db
 from app.context import FittedContext
+from app.pricing import cost_usd
 from app.streaming import sse, stream_claude
 
 logger = logging.getLogger(__name__)
@@ -40,7 +41,8 @@ async def reply_stream(conversation: dict, model: str, context: FittedContext) -
             if event == "text_delta":
                 parts.append(data["text"])
             elif event == "usage":
-                usage = data
+                usage = data  # saved to the database as-is (these keys are table columns)
+                data = {**data, "cost_usd": cost_usd(data)}
             elif event == "error":
                 settled = True
             elif event == "done":
