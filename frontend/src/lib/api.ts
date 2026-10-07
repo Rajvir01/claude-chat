@@ -1,3 +1,4 @@
+import { getPassword, setPassword } from "./auth";
 import { readSSE } from "./sse";
 import type {
   Conversation,
@@ -22,17 +23,34 @@ export class ChatError extends Error {
   }
 }
 
-// fetch() only throws when the server can't be reached at all; turn that into a readable error.
+// Every request goes through here: adds the password, and turns "server
+// unreachable" (the only case where fetch() itself throws) into a readable error.
 async function send(path: string, init: RequestInit = {}): Promise<Response> {
+  let response: Response;
   try {
-    return await fetch(`${API_URL}${path}`, {
+    response = await fetch(`${API_URL}${path}`, {
       ...init,
-      headers: { "Content-Type": "application/json", ...init.headers },
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${getPassword() ?? ""}`,
+        ...init.headers,
+      },
     });
   } catch (err) {
     if (init.signal?.aborted) throw err;
     throw new ChatError("Can't reach the server. Is the backend running?", true);
   }
+  // Wrong or changed password: forget it, which sends the user back to the login screen.
+  if (response.status === 401) setPassword(null);
+  return response;
+}
+
+/** True if `password` is accepted. Used by the login screen before saving it. */
+export async function checkPassword(password: string): Promise<boolean> {
+  const response = await send("/auth/check", { headers: { Authorization: `Bearer ${password}` } });
+  if (response.ok) return true;
+  if (response.status === 401) return false;
+  throw await errorFrom(response);
 }
 
 // Turn a 4xx/5xx response into a ChatError, using FastAPI's `detail` message when there is one.

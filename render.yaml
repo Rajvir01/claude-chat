@@ -1,0 +1,32 @@
+# Render Blueprint: describes the backend so Render can create it from this repo.
+# Dashboard: New > Blueprint > pick this repo. Docs: https://render.com/docs/blueprint-spec
+services:
+  - type: web
+    name: claude-chat-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    # Closest Render region to the Supabase database (Mumbai).
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    # Render tells the app which port to listen on via $PORT.
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.10
+      - key: CLAUDE_MODEL
+        value: claude-sonnet-4-5
+      # sync: false = secret. Render asks you to type the value when you
+      # create the Blueprint; it's never stored in this file or the repo.
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: APP_PASSWORD
+        sync: false
+      # The Vercel URL of the frontend, filled in once that's deployed.
+      - key: FRONTEND_ORIGINS
+        sync: false

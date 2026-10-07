@@ -1,6 +1,6 @@
-import { Chat } from "@/components/Chat";
+import { AuthGate } from "@/components/AuthGate";
 
-// A Server Component (no "use client"): it just renders the interactive Chat.
+// A Server Component (no "use client"): it just renders the interactive app.
 export default function Home() {
-  return <Chat />;
+  return <AuthGate />;
 }

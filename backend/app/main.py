@@ -2,11 +2,12 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict
 from uuid import UUID
 
-from fastapi import FastAPI, HTTPException, Response
+from fastapi import APIRouter, Depends, FastAPI, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 
 from app import config, db
+from app.auth import require_password
 from app.chat import make_title, reply_stream
 from app.context import ContextTooLongError, fit_to_context
 from app.model_registry import MODELS
@@ -50,21 +51,33 @@ async def get_conversation_or_404(conversation_id: UUID) -> dict:
     return conversation
 
 
+# Public: hosting platforms call this to check the server is up.
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+# Everything on this router needs the password. Declaring the dependency once
+# here means no route can forget it.
+api = APIRouter(dependencies=[Depends(require_password)])
+
+
+@api.get("/auth/check")
+async def auth_check():
+    """Lets the login screen test a password without side effects."""
+    return {"ok": True}
 
 
 # `response_model` makes FastAPI validate and filter what we return, and
 # documents the response shape on /docs.
 
 
-@app.get("/conversations", response_model=list[ConversationSummary])
+@api.get("/conversations", response_model=list[ConversationSummary])
 async def list_conversations():
     return await db.list_conversations()
 
 
-@app.get("/models", response_model=ModelsResponse)
+@api.get("/models", response_model=ModelsResponse)
 async def list_models():
     return {
         "default": config.CLAUDE_MODEL,
@@ -73,12 +86,12 @@ async def list_models():
     }
 
 
-@app.post("/conversations", response_model=Conversation, status_code=201)
+@api.post("/conversations", response_model=Conversation, status_code=201)
 async def create_conversation(body: ConversationCreate):
     return await db.create_conversation(body.model_dump())
 
 
-@app.get("/conversations/{conversation_id}", response_model=ConversationDetail)
+@api.get("/conversations/{conversation_id}", response_model=ConversationDetail)
 async def get_conversation(conversation_id: UUID):
     conversation = await get_conversation_or_404(conversation_id)
     messages = await db.list_messages(conversation_id)
@@ -87,7 +100,7 @@ async def get_conversation(conversation_id: UUID):
     return {**conversation, "messages": [{**m, "cost_usd": cost_usd(m)} for m in messages]}
 
 
-@app.patch("/conversations/{conversation_id}", response_model=Conversation)
+@api.patch("/conversations/{conversation_id}", response_model=Conversation)
 async def update_conversation(conversation_id: UUID, body: ConversationUpdate):
     # exclude_unset: only the fields the client actually sent. Without it,
     # renaming a chat would also reset every setting to None.
@@ -103,14 +116,14 @@ async def update_conversation(conversation_id: UUID, body: ConversationUpdate):
     return updated
 
 
-@app.delete("/conversations/{conversation_id}", status_code=204)
+@api.delete("/conversations/{conversation_id}", status_code=204)
 async def delete_conversation(conversation_id: UUID):
     if not await db.delete_conversation(conversation_id):
         raise HTTPException(status_code=404, detail="Conversation not found")
     return Response(status_code=204)
 
 
-@app.post("/conversations/{conversation_id}/reply")
+@api.post("/conversations/{conversation_id}/reply")
 async def reply(conversation_id: UUID, body: ReplyRequest):
     # Everything that can fail with a normal HTTP error happens *before* we
     # start streaming, while we can still send a 404 or 409 status.
@@ -151,3 +164,7 @@ async def reply(conversation_id: UUID, body: ReplyRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+# Must come after the routes above are defined: this copies them onto the app.
+app.include_router(api)

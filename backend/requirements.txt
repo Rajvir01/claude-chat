@@ -1,0 +1,9 @@
+# What the API needs to run, in production and locally.
+# Exact versions (==) so the server installs exactly what was tested here.
+anthropic==1.11.0
+# Imported directly by app/chat.py (it also comes with fastapi, but we pin what we use).
+anyio==4.15.1
+fastapi==0.142.2
+python-dotenv==1.2.4
+supabase==2.32.0
+uvicorn[standard]==0.54.0

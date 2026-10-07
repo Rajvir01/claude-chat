@@ -1,0 +1,9 @@
+# Everything for local development: the app, plus tests and the course CLI.
+# Install with: pip install -r requirements-dev.txt
+-r requirements.txt
+pytest==9.1.1
+
+# Only for the course code in course/ (not used by the web app).
+# It's written against mcp 1.8 APIs; mcp 2.x renamed FastMCP.
+mcp[cli]==1.8.0
+prompt-toolkit==3.0.53

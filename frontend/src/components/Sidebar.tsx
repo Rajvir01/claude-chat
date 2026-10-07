@@ -1,5 +1,6 @@
 "use client";
 
+import { setPassword } from "@/lib/auth";
 import type { ConversationSummary } from "@/lib/types";
 
 export function Sidebar({
@@ -50,6 +51,13 @@ export function Sidebar({
           </li>
         ))}
       </ul>
+
+      <button
+        onClick={() => setPassword(null)}
+        className="rounded-lg px-3 py-2 text-left text-xs text-zinc-500 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+      >
+        Lock (forget password on this device)
+      </button>
     </nav>
   );
 }

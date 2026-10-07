@@ -17,6 +17,9 @@ CLAUDE_MODEL = os.getenv("CLAUDE_MODEL", "")
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_SECRET_KEY = os.getenv("SUPABASE_SECRET_KEY", "")
 
+# Shared password the frontend must send with every request.
+APP_PASSWORD = os.getenv("APP_PASSWORD", "")
+
 # Most input tokens we'll send per request. Models accept far more (Sonnet 4.5
 # takes 1M), but every request pays for its whole input, so this is a cost cap.
 # Set it very low (e.g. 1500) to watch old messages get trimmed.
@@ -35,3 +38,4 @@ assert CLAUDE_MODEL, "CLAUDE_MODEL cannot be empty. Update backend/.env"
 assert CLAUDE_MODEL in MODELS, f"CLAUDE_MODEL must be one of {list(MODELS)}. Update backend/.env"
 assert SUPABASE_URL, "SUPABASE_URL cannot be empty. Update backend/.env"
 assert SUPABASE_SECRET_KEY, "SUPABASE_SECRET_KEY cannot be empty. Update backend/.env"
+assert len(APP_PASSWORD) >= 12, "APP_PASSWORD must be at least 12 characters. Update backend/.env"
